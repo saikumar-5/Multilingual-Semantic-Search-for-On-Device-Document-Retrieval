@@ -1,0 +1,122 @@
+[
+  {
+    "query": "network security",
+    "relevant_docs": ["CSE3714_NETWORK SECURITY_END TERM.pdf", "CSE3714_NETWORK SECURITY_RECOURSE.pdf"]
+  },
+  {
+    "query": "marksheet semester",
+    "relevant_docs": ["s-1_marksheet.pdf", "s-2_marksheet.pdf", "s-3_marksheet.pdf"]
+  },
+  {
+    "query": "fingerflow project",
+    "relevant_docs": ["TwoPageSummary_FingerFlow.pdf", "PandL-FingerFlow.xlsx"]
+  },
+  {
+    "query": "machine learning sensor",
+    "relevant_docs": ["sensors-22-08374-v2.pdf", "Label_recognition_on_metal_surfaces_in_semiconduct.pdf"]
+  },
+  {
+    "query": "invoice bill payment",
+    "relevant_docs": ["invoice-jbl.pdf", "feereceipt6thsem.pdf"]
+  },
+  {
+    "query": "pothole road drainage",
+    "relevant_docs": ["Potholes_eng.pdf", "drainage_eng.pdf"]
+  },
+  {
+    "query": "timetable schedule class",
+    "relevant_docs": ["2023 Batch Timetable 5th Sem Wef 29th July 25 -V.1.xlsx"]
+  },
+  {
+    "query": "coursera certificate",
+    "relevant_docs": ["Coursera MFO09AW7EFKH.pdf"]
+  },
+  {
+    "query": "revenue infrastructure",
+    "relevant_docs": ["revenue_eng.pdf", "infra_eng.pdf"]
+  },
+  {
+    "query": "contact information database",
+    "relevant_docs": ["Database for Contact Info..xlsx"]
+  },
+  {
+    "query": "విద్య",
+    "relevant_docs": ["Telugu_Document_2_Education.docx"]
+  },
+  {
+    "query": "ఆరోగ్యం",
+    "relevant_docs": ["Telugu_Document_4_Health.docx"]
+  },
+  {
+    "query": "సంస్కృతి",
+    "relevant_docs": ["Telugu_Document_5_Culture.docx"]
+  },
+  {
+    "query": "పర్యావరణం",
+    "relevant_docs": ["Telugu_Document_3_Environment.docx"]
+  },
+  {
+    "query": "డిజిటల్ టెక్నాలజీ",
+    "relevant_docs": ["Telugu_Document_Digital_Technology.docx"]
+  },
+  {
+    "query": "education learning",
+    "relevant_docs": ["Telugu_Document_2_Education.docx", "Coursera MFO09AW7EFKH.pdf"]
+  },
+  {
+    "query": "environment pollution",
+    "relevant_docs": ["Telugu_Document_3_Environment.docx"]
+  },
+  {
+    "query": "health medical",
+    "relevant_docs": ["Telugu_Document_4_Health.docx"]
+  },
+  {
+    "query": "drainage water supply",
+    "relevant_docs": ["drainage_eng.pdf", "drainage_tel.pdf", "water_tel.pdf"]
+  },
+  {
+    "query": "electricity power",
+    "relevant_docs": ["electricity_tel.pdf"]
+  },
+  {
+    "query": "house permission document",
+    "relevant_docs": ["Telugu_Letter.pdf"]
+  },
+  {
+    "query": "red cross certificate",
+    "relevant_docs": ["red cross certificate harry.pdf"]
+  },
+  {
+    "query": "college id card",
+    "relevant_docs": ["clgid.pdf"]
+  },
+  {
+    "query": "project report internship",
+    "relevant_docs": ["AdityaParecha.pdf", "Akash.pdf", "AnirudhGaneshTiwari.pdf", "KartikKotnala.pdf"]
+  },
+  {
+    "query": "menu food restaurant",
+    "relevant_docs": ["menu_data.xlsx"]
+  },
+  {
+    "query": "label recognition semiconductor",
+    "relevant_docs": ["Label_recognition_on_metal_surfaces_in_semiconduct.pdf"]
+  },
+  {
+    "query": "software engineering",
+    "relevant_docs": ["se.docx"]
+  },
+  {
+    "query": "fee receipt semester",
+    "relevant_docs": ["feereceipt6thsem.pdf"]
+  },
+  {
+    "query": "Telugu letter official",
+    "relevant_docs": ["Telugu_Letter.pdf"]
+  },
+  {
+    "query": "Hindi document",
+    "relevant_docs": ["hindi_1.pdf", "hindi_2.pdf", "hindi_3.pdf", "hindi_4.pdf", "hindi_5.pdf"]
+  }
+]

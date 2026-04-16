@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.spec
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data files (generated, not tracked)
+data/inverted_index.pkl
+data/tfidf_index.pkl
+data/vectors.faiss
+data/vector_meta.pkl
+data/doc_store.pkl
+data/metadata.json
+data/settings.json
+
+IR_DOCUMNETS
+# Model files (too large for git)
+models/
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# PyInstaller
+*.manifest
+*.exe
+
+# Temp files
+*.tmp
+*.log
+reference_doc_full.txt
