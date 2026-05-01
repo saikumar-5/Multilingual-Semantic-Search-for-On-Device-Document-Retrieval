@@ -1,0 +1,86 @@
+[
+  {
+    "query": "water problem",
+    "mode": "hybrid",
+    "count": 10,
+    "time": "18:40:44  19-Apr"
+  },
+  {
+    "query": "water problem",
+    "mode": "semantic",
+    "count": 10,
+    "time": "18:40:24  19-Apr"
+  },
+  {
+    "query": "water",
+    "mode": "semantic",
+    "count": 10,
+    "time": "18:40:23  19-Apr"
+  },
+  {
+    "query": "study",
+    "mode": "semantic",
+    "count": 10,
+    "time": "18:39:47  19-Apr"
+  },
+  {
+    "query": "tablet",
+    "mode": "semantic",
+    "count": 10,
+    "time": "18:35:25  19-Apr"
+  },
+  {
+    "query": "tablet",
+    "mode": "keyword",
+    "count": 3,
+    "time": "18:34:59  19-Apr"
+  },
+  {
+    "query": "tabl",
+    "mode": "keyword",
+    "count": 0,
+    "time": "18:34:58  19-Apr"
+  },
+  {
+    "query": "tab",
+    "mode": "keyword",
+    "count": 7,
+    "time": "18:34:57  19-Apr"
+  },
+  {
+    "query": "security",
+    "mode": "keyword",
+    "count": 10,
+    "time": "18:34:49  19-Apr"
+  },
+  {
+    "query": "secuir",
+    "mode": "keyword",
+    "count": 0,
+    "time": "18:34:47  19-Apr"
+  },
+  {
+    "query": "network",
+    "mode": "keyword",
+    "count": 10,
+    "time": "18:34:32  19-Apr"
+  },
+  {
+    "query": "yogesh",
+    "mode": "keyword",
+    "count": 6,
+    "time": "18:34:21  19-Apr"
+  },
+  {
+    "query": "whatsapp",
+    "mode": "keyword",
+    "count": 0,
+    "time": "18:34:16  19-Apr"
+  },
+  {
+    "query": "what",
+    "mode": "keyword",
+    "count": 0,
+    "time": "18:34:15  19-Apr"
+  }
+]

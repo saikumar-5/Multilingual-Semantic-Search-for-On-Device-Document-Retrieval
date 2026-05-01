@@ -46,13 +46,20 @@ class KeywordSearch:
         elif parsed["type"] == "phrase":
             return self._phrase_search(parsed["raw"], top_k)
         else:
-            return self._ranked_search(parsed["terms"], top_k)
+            return self._ranked_search(
+                parsed["terms"],
+                top_k,
+                weighted_terms=parsed.get("weighted_terms"),
+            )
 
     def _ranked_search(
-        self, terms: List[str], top_k: int
+        self,
+        terms: List[str],
+        top_k: int,
+        weighted_terms=None,
     ) -> List[Tuple[int, float]]:
         """Free-text search with TF-IDF cosine similarity ranking."""
-        return self.tfidf.rank_documents(terms, top_k)
+        return self.tfidf.rank_documents(terms, top_k, weighted_terms=weighted_terms)
 
     def _boolean_search(
         self, query: str, top_k: int

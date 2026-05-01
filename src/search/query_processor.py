@@ -11,6 +11,8 @@ from typing import List, Tuple
 import logging
 
 from src.indexer.preprocessor import Preprocessor
+from src.search.query_expander import QueryExpander
+from src.config import ENABLE_QUERY_EXPANSION
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,7 @@ class QueryProcessor:
     def __init__(self):
         self.preprocessor = Preprocessor(remove_stopwords=False)
         self.preprocessor_filtered = Preprocessor(remove_stopwords=True)
+        self.query_expander = QueryExpander()
 
     def parse(self, query: str) -> dict:
         """
@@ -35,27 +38,49 @@ class QueryProcessor:
         """
         query = query.strip()
         if not query:
-            return {"raw": "", "type": "free_text", "terms": [], "language": "en"}
+            return {
+                "raw": "",
+                "type": "free_text",
+                "terms": [],
+                "language": "en",
+                "original_terms": [],
+                "expanded_terms": [],
+                "weighted_terms": {},
+                "expandable": False,
+                "expand_reason": "empty_query",
+            }
 
         language = self.preprocessor.detect_language(query)
 
         # Detect query type
         if self._is_boolean(query):
+            terms = self.preprocessor_filtered.preprocess(query)
             return {
                 "raw": query,
                 "type": "boolean",
-                "terms": self.preprocessor_filtered.preprocess(query),
+                "terms": terms,
                 "language": language,
+                "original_terms": terms,
+                "expanded_terms": [],
+                "weighted_terms": {t: 1.0 for t in terms},
+                "expandable": False,
+                "expand_reason": "boolean_query",
             }
 
         if self._is_phrase(query):
             # Remove quotes for phrase search
             phrase = query.strip('"').strip("'")
+            phrase_terms = self.preprocessor_filtered.preprocess(phrase)
             return {
                 "raw": phrase,
                 "type": "phrase",
-                "terms": self.preprocessor_filtered.preprocess(phrase),
+                "terms": phrase_terms,
                 "language": language,
+                "original_terms": phrase_terms,
+                "expanded_terms": [],
+                "weighted_terms": {t: 1.0 for t in phrase_terms},
+                "expandable": False,
+                "expand_reason": "phrase_query",
             }
 
         if self._is_wildcard(query):
@@ -64,15 +89,37 @@ class QueryProcessor:
                 "type": "wildcard",
                 "terms": [query.lower()],
                 "language": language,
+                "original_terms": [query.lower()],
+                "expanded_terms": [],
+                "weighted_terms": {query.lower(): 1.0},
+                "expandable": False,
+                "expand_reason": "wildcard_query",
             }
 
         # Default: free-text query
         terms = self.preprocessor_filtered.preprocess(query)
+        if ENABLE_QUERY_EXPANSION:
+            expansion = self.query_expander.expand(terms, language)
+        else:
+            expansion = {
+                "original_terms": terms,
+                "expanded_terms": [],
+                "weighted_terms": {t: 1.0 for t in terms},
+                "expandable": False,
+                "expand_reason": "query_expansion_disabled",
+            }
+
+        merged_terms = list(expansion["weighted_terms"].keys())
         return {
             "raw": query,
             "type": "free_text",
-            "terms": terms,
+            "terms": merged_terms,
             "language": language,
+            "original_terms": expansion["original_terms"],
+            "expanded_terms": expansion["expanded_terms"],
+            "weighted_terms": expansion["weighted_terms"],
+            "expandable": expansion.get("expandable", False),
+            "expand_reason": expansion.get("expand_reason", "unknown"),
         }
 
     def _is_boolean(self, query: str) -> bool:

@@ -25,53 +25,44 @@ class SearchFrame(ctk.CTkFrame):
         self._create_widgets()
 
     def _create_widgets(self):
-        # ── App Title Bar ────────────────────────────────────
-        header = ctk.CTkFrame(self, fg_color="transparent", height=50)
-        header.pack(fill="x", padx=20, pady=(18, 0))
-
-        title = ctk.CTkLabel(
-            header,
-            text="DocSearch",
-            font=ctk.CTkFont(family="Segoe UI", size=26, weight="bold"),
-            text_color=("#1a73e8", "#58a6ff"),
+        # ── Main Surface ─────────────────────────────────────
+        surface = ctk.CTkFrame(
+            self,
+            fg_color=("#11182a", "#11182a"),
+            corner_radius=16,
+            border_width=1,
+            border_color=("#26345a", "#26345a"),
         )
-        title.pack(side="left")
+        surface.pack(fill="both", expand=True, padx=10, pady=10)
 
-        subtitle = ctk.CTkLabel(
-            header,
-            text="Multilingual Semantic Search",
-            font=ctk.CTkFont(size=12),
-            text_color="gray50",
-        )
-        subtitle.pack(side="left", padx=(10, 0), pady=(8, 0))
-
-        # ── Search Bar (Google-style) ────────────────────────
+        # ── Search Bar ───────────────────────────────────────
         search_container = ctk.CTkFrame(
-            self, fg_color=("gray92", "gray17"), corner_radius=25, height=52
+            surface, fg_color=("#1a2238", "#1a2238"), corner_radius=14, height=56
         )
-        search_container.pack(fill="x", padx=20, pady=(14, 0))
+        search_container.pack(fill="x", padx=14, pady=(14, 0))
         search_container.pack_propagate(False)
 
         # Search icon (magnifying glass unicode)
         icon = ctk.CTkLabel(
             search_container,
             text="\u2315",
-            font=ctk.CTkFont(size=20),
-            text_color="gray50",
+            font=ctk.CTkFont(size=18),
+            text_color=("#92a6d3", "#92a6d3"),
             width=30,
         )
-        icon.pack(side="left", padx=(16, 4))
+        icon.pack(side="left", padx=(14, 6))
 
         self.search_entry = ctk.CTkEntry(
             search_container,
             placeholder_text="Search documents in English, Hindi, or Telugu...",
             font=ctk.CTkFont(family="Segoe UI", size=15),
-            height=44,
+            height=42,
             border_width=0,
             fg_color="transparent",
-            placeholder_text_color="gray50",
+            text_color=("#d6e2ff", "#d6e2ff"),
+            placeholder_text_color=("#7e90b8", "#7e90b8"),
         )
-        self.search_entry.pack(side="left", fill="both", expand=True, padx=(0, 4))
+        self.search_entry.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
         # Bind live search events
         self.search_entry.bind("<KeyRelease>", self._on_key_release)
@@ -87,8 +78,8 @@ class SearchFrame(ctk.CTkFrame):
             corner_radius=16,
             font=ctk.CTkFont(size=14),
             fg_color="transparent",
-            hover_color=("gray80", "gray30"),
-            text_color="gray50",
+            hover_color=("#2a3558", "#2a3558"),
+            text_color=("#8aa0d1", "#8aa0d1"),
             command=self._clear_search,
         )
         # Hidden initially, shown when there's text
@@ -97,27 +88,27 @@ class SearchFrame(ctk.CTkFrame):
         # Search button
         self.search_btn = ctk.CTkButton(
             search_container,
-            text="\u2315 Search",
-            width=90,
+            text="Search \u2315",
+            width=108,
             height=36,
-            corner_radius=18,
+            corner_radius=10,
             font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=("#1a73e8", "#1a73e8"),
-            hover_color=("#155ab6", "#2b85f0"),
+            fg_color=("#08a7ff", "#08a7ff"),
+            hover_color=("#0790db", "#2ec2ff"),
             text_color="white",
             command=self._do_search_now,
         )
-        self.search_btn.pack(side="right", padx=(4, 8))
+        self.search_btn.pack(side="right", padx=(0, 8))
 
         # ── Status bar ───────────────────────────────────────
-        status_row = ctk.CTkFrame(self, fg_color="transparent", height=24)
-        status_row.pack(fill="x", padx=24, pady=(6, 0))
+        status_row = ctk.CTkFrame(surface, fg_color="transparent", height=24)
+        status_row.pack(fill="x", padx=18, pady=(8, 2))
 
         self.status_label = ctk.CTkLabel(
             status_row,
             text="Ready  |  Type to search instantly",
             font=ctk.CTkFont(size=11),
-            text_color="gray50",
+            text_color=("#90a0c9", "#90a0c9"),
         )
         self.status_label.pack(side="left")
 
@@ -125,18 +116,22 @@ class SearchFrame(ctk.CTkFrame):
             status_row,
             text="",
             font=ctk.CTkFont(size=11),
-            text_color=("#1a73e8", "#58a6ff"),
+            text_color=("#08a7ff", "#61ceff"),
         )
         self.spinner_label.pack(side="right")
 
         # ── Results Area ─────────────────────────────────────
+        self.results_host = ctk.CTkFrame(surface, fg_color="transparent")
+        self.results_host.pack(fill="both", expand=True, padx=10, pady=(2, 10))
+
+        self.placeholder_view = ctk.CTkFrame(self.results_host, fg_color="transparent")
+
         self.results_frame = ctk.CTkScrollableFrame(
-            self,
-            fg_color="transparent",
-            scrollbar_button_color=("gray75", "gray30"),
-            scrollbar_button_hover_color=("gray65", "gray40"),
+            self.results_host,
+            fg_color=("#11182a", "#11182a"),
+            scrollbar_button_color=("#3b4f82", "#3b4f82"),
+            scrollbar_button_hover_color=("#4762a3", "#4762a3"),
         )
-        self.results_frame.pack(fill="both", expand=True, padx=16, pady=(8, 12))
 
     def _on_key_release(self, event):
         """Live search with debounce - triggers search 400ms after user stops typing."""
@@ -227,63 +222,88 @@ class SearchFrame(ctk.CTkFrame):
 
     def _show_placeholder(self):
         """Show welcome/placeholder content."""
-        for widget in self.results_frame.winfo_children():
+        self.results_frame.pack_forget()
+        self.placeholder_view.pack(fill="both", expand=True)
+
+        for widget in self.placeholder_view.winfo_children():
             widget.destroy()
 
         placeholder_frame = ctk.CTkFrame(
-            self.results_frame, fg_color="transparent"
+            self.placeholder_view, fg_color="transparent"
         )
         placeholder_frame.pack(expand=True, pady=40)
 
-        icon = ctk.CTkLabel(
+        orb = ctk.CTkFrame(
             placeholder_frame,
-            text="\u2315",
-            font=ctk.CTkFont(size=48),
-            text_color="gray40",
+            width=160,
+            height=160,
+            corner_radius=80,
+            fg_color=("#23385f", "#23385f"),
+            border_width=2,
+            border_color=("#3f5f99", "#3f5f99"),
         )
-        icon.pack(pady=(0, 10))
+        orb.pack(pady=(0, 10))
+        orb.pack_propagate(False)
+
+        icon = ctk.CTkLabel(
+            orb,
+            text="\u2315",
+            font=ctk.CTkFont(size=56),
+            text_color=("#b4d4ff", "#b4d4ff"),
+        )
+        icon.place(relx=0.5, rely=0.5, anchor="center")
 
         msg = ctk.CTkLabel(
             placeholder_frame,
             text="Search your documents instantly",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color="gray45",
+            font=ctk.CTkFont(size=32, weight="bold"),
+            text_color=("#d7e5ff", "#d7e5ff"),
         )
         msg.pack()
 
-        suggestions = [
-            ("network security", "Keyword match"),
-            ("marksheet", "Find your marksheets"),
-            ("\u0c35\u0c3f\u0c26\u0c4d\u0c2f (Telugu)", "Cross-language search"),
-            ("house permission", "Semantic meaning match"),
-            ("comp*", "Wildcard pattern"),
+        subtitle = ctk.CTkLabel(
+            placeholder_frame,
+            text="DocSearch features available before your first query",
+            font=ctk.CTkFont(size=15),
+            text_color=("#9aaed9", "#9aaed9"),
+        )
+        subtitle.pack(pady=(6, 14))
+
+        features = [
+            ("Multilingual Retrieval", "Search across English, Hindi, and Telugu documents."),
+            ("Hybrid Ranking", "Combines keyword, semantic retrieval, and reranking."),
+            ("Document OCR", "Reads text from scanned PDFs and image files."),
+            ("Wildcard Support", "Use patterns like comp* for quick partial matches."),
+            ("Fast Re-Index", "Refresh your index anytime after adding folders."),
         ]
 
         tips_frame = ctk.CTkFrame(placeholder_frame, fg_color="transparent")
-        tips_frame.pack(pady=(20, 0))
+        tips_frame.pack(pady=(4, 0))
 
-        for query, desc in suggestions:
+        for title, desc in features:
             row = ctk.CTkFrame(tips_frame, fg_color="transparent")
-            row.pack(anchor="w", pady=2)
+            row.pack(anchor="w", pady=4)
 
             chip = ctk.CTkButton(
                 row,
-                text=query,
-                font=ctk.CTkFont(size=12),
-                fg_color=("gray85", "gray25"),
-                hover_color=("gray75", "gray35"),
-                text_color=("#1a73e8", "#58a6ff"),
-                corner_radius=14,
-                height=28,
-                command=lambda q=query: self._search_suggestion(q),
+                text=title,
+                font=ctk.CTkFont(size=16, weight="bold"),
+                fg_color=("#20345a", "#20345a"),
+                hover_color=("#20345a", "#20345a"),
+                text_color=("#9ed3ff", "#9ed3ff"),
+                corner_radius=16,
+                border_width=1,
+                border_color=("#3f6cb0", "#3f6cb0"),
+                height=34,
+                command=lambda: None,
             )
             chip.pack(side="left", padx=(0, 8))
 
             hint = ctk.CTkLabel(
                 row,
                 text=desc,
-                font=ctk.CTkFont(size=11),
-                text_color="gray50",
+                font=ctk.CTkFont(size=16),
+                text_color=("#93a3cd", "#93a3cd"),
             )
             hint.pack(side="left")
 
@@ -295,16 +315,25 @@ class SearchFrame(ctk.CTkFrame):
 
     def _show_results(self, results: List[dict], query: str):
         """Display search results."""
+        self.placeholder_view.pack_forget()
+        self.results_frame.pack(fill="both", expand=True)
+
         for widget in self.results_frame.winfo_children():
             widget.destroy()
 
         self.current_results = results
 
         if not results:
+            self.results_frame.pack_forget()
+            self.placeholder_view.pack(fill="both", expand=True)
+
             self.status_label.configure(
                 text=f'No results for "{query}"', text_color="#e67e22"
             )
-            no_frame = ctk.CTkFrame(self.results_frame, fg_color="transparent")
+            for widget in self.placeholder_view.winfo_children():
+                widget.destroy()
+
+            no_frame = ctk.CTkFrame(self.placeholder_view, fg_color="transparent")
             no_frame.pack(expand=True, pady=40)
             ctk.CTkLabel(
                 no_frame,
@@ -476,9 +505,12 @@ class SearchFrame(ctk.CTkFrame):
 
     def set_loading(self, message: str = "Loading..."):
         """Show a loading state."""
-        for widget in self.results_frame.winfo_children():
+        self.results_frame.pack_forget()
+        self.placeholder_view.pack(fill="both", expand=True)
+
+        for widget in self.placeholder_view.winfo_children():
             widget.destroy()
-        frame = ctk.CTkFrame(self.results_frame, fg_color="transparent")
+        frame = ctk.CTkFrame(self.placeholder_view, fg_color="transparent")
         frame.pack(expand=True, pady=40)
         ctk.CTkLabel(
             frame, text="\u231B", font=ctk.CTkFont(size=36), text_color="gray40"

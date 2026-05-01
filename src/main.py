@@ -25,6 +25,9 @@ from src.config import (
     DOCUMENT_STORE_PATH,
     DATA_DIR,
     DEFAULT_TOP_K,
+    ENABLE_CROSS_ENCODER_RERANK,
+    CROSS_ENCODER_CANDIDATES,
+    CROSS_ENCODER_TOP_K,
 )
 
 # Configure logging
@@ -112,6 +115,7 @@ def cmd_search(query: str, mode: str = "hybrid", top_k: int = DEFAULT_TOP_K):
     from src.search.keyword_search import KeywordSearch
     from src.search.semantic_search import SemanticSearch
     from src.search.hybrid_search import HybridSearch
+    from src.search.cross_encoder_reranker import CrossEncoderReranker
     from src.search.wildcard import WildcardSearch
     from src.search.ranker import Ranker
     from src.search.query_processor import QueryProcessor
@@ -140,7 +144,19 @@ def cmd_search(query: str, mode: str = "hybrid", top_k: int = DEFAULT_TOP_K):
     # Build search engines
     kw_search = KeywordSearch(inv_index, tfidf)
     sem_search = SemanticSearch(vec_index)
-    hybrid = HybridSearch(kw_search, sem_search)
+    reranker = None
+    if ENABLE_CROSS_ENCODER_RERANK:
+        reranker = CrossEncoderReranker(
+            documents,
+            top_candidates=CROSS_ENCODER_CANDIDATES,
+        )
+
+    hybrid = HybridSearch(
+        kw_search,
+        sem_search,
+        reranker=reranker,
+        rerank_candidates=CROSS_ENCODER_CANDIDATES,
+    )
     wildcard = WildcardSearch(inv_index, tfidf)
     wildcard.build()
     ranker = Ranker(documents)
@@ -156,7 +172,8 @@ def cmd_search(query: str, mode: str = "hybrid", top_k: int = DEFAULT_TOP_K):
     elif mode == "semantic":
         raw_results = sem_search.search(query, top_k)
     else:
-        raw_results = hybrid.search(query, top_k)
+        final_top_k = CROSS_ENCODER_TOP_K if ENABLE_CROSS_ENCODER_RERANK else top_k
+        raw_results = hybrid.search(query, final_top_k)
 
     results = ranker.format_results(raw_results, query)
 
@@ -188,6 +205,7 @@ def cmd_evaluate():
     from src.search.keyword_search import KeywordSearch
     from src.search.semantic_search import SemanticSearch
     from src.search.hybrid_search import HybridSearch
+    from src.search.cross_encoder_reranker import CrossEncoderReranker
     from src.evaluation.metrics import EvaluationMetrics
 
     if not DOCUMENT_STORE_PATH.exists():
@@ -213,7 +231,18 @@ def cmd_evaluate():
 
     kw_search = KeywordSearch(inv_index, tfidf)
     sem_search = SemanticSearch(vec_index)
-    hybrid = HybridSearch(kw_search, sem_search)
+    reranker = None
+    if ENABLE_CROSS_ENCODER_RERANK:
+        reranker = CrossEncoderReranker(
+            documents,
+            top_candidates=CROSS_ENCODER_CANDIDATES,
+        )
+    hybrid = HybridSearch(
+        kw_search,
+        sem_search,
+        reranker=reranker,
+        rerank_candidates=CROSS_ENCODER_CANDIDATES,
+    )
 
     # Load test queries
     test_queries_path = Path(__file__).parent / "evaluation" / "test_queries.json"
@@ -224,7 +253,10 @@ def cmd_evaluate():
     for mode_name, search_fn in [
         ("Keyword (TF-IDF)", lambda q: kw_search.search(q, DEFAULT_TOP_K)),
         ("Semantic (Vector)", lambda q: sem_search.search(q, DEFAULT_TOP_K)),
-        ("Hybrid", lambda q: hybrid.search(q, DEFAULT_TOP_K)),
+        (
+            "Hybrid + Cross-Encoder",
+            lambda q: hybrid.search(q, CROSS_ENCODER_TOP_K if ENABLE_CROSS_ENCODER_RERANK else DEFAULT_TOP_K),
+        ),
     ]:
         print(f"\n  Evaluating: {mode_name}")
         results = evaluator.evaluate_all(search_fn, documents)

@@ -14,8 +14,26 @@ import pickle
 from pathlib import Path
 from typing import List, Tuple, Optional
 import logging
+import re
 
-from src.config import EMBEDDING_MODEL_NAME, EMBEDDING_DIMENSION, MAX_CHUNK_TOKENS
+from src.config import (
+    EMBEDDING_MODEL_NAME,
+    EMBEDDING_MODEL_LOCAL_DIR,
+    EMBEDDING_DIMENSION,
+    MAX_CHUNK_TOKENS,
+    OFFLINE_MODE,
+    EMBEDDING_QUERY_PREFIX,
+    EMBEDDING_DOCUMENT_PREFIX,
+    CPU_THREADS,
+    FAISS_INDEX_TYPE,
+    FAISS_HNSW_M,
+    FAISS_HNSW_EF_CONSTRUCTION,
+    FAISS_HNSW_EF_SEARCH,
+    CHUNKING_STRATEGY,
+    SEMANTIC_CHUNK_SIMILARITY_THRESHOLD,
+    SEMANTIC_CHUNK_MIN_TOKENS,
+    SEMANTIC_CHUNK_OVERLAP_SENTENCES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,15 +67,53 @@ class VectorIndex:
             return
 
         from sentence_transformers import SentenceTransformer
+        import torch
 
-        logger.info(f"Loading embedding model: {EMBEDDING_MODEL_NAME}")
-        self.model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        torch.set_num_threads(CPU_THREADS)
+        if hasattr(torch, "set_num_interop_threads"):
+            torch.set_num_interop_threads(1)
+
+        model_source = EMBEDDING_MODEL_NAME
+        local_files_only = False
+
+        if EMBEDDING_MODEL_LOCAL_DIR.exists():
+            model_source = str(EMBEDDING_MODEL_LOCAL_DIR)
+            local_files_only = True
+        elif OFFLINE_MODE:
+            raise FileNotFoundError(
+                f"Offline mode enabled but embedding model not found at: {EMBEDDING_MODEL_LOCAL_DIR}"
+            )
+
+        logger.info(f"Loading embedding model from: {model_source}")
+        self.model = SentenceTransformer(
+            model_source,
+            device="cpu",
+            local_files_only=local_files_only,
+        )
         self._model_loaded = True
         logger.info("Embedding model loaded successfully")
 
-    def _chunk_text(self, text: str) -> List[str]:
+    def _embed_text(self, text: str, is_query: bool) -> str:
+        """Format text for embedding model input.
+
+        E5-family models are trained with explicit prefixes:
+        - query: <text>
+        - passage: <text>
         """
-        Split text into chunks suitable for embedding.
+        prefix = EMBEDDING_QUERY_PREFIX if is_query else EMBEDDING_DOCUMENT_PREFIX
+        clean = (text or "").strip()
+        return f"{prefix}{clean}" if clean else clean
+
+    def _chunk_text(self, text: str) -> List[str]:
+        """Split text into chunks using configured strategy."""
+        strategy = (CHUNKING_STRATEGY or "fixed").strip().lower()
+        if strategy == "semantic":
+            return self._semantic_chunk_text(text)
+        return self._fixed_chunk_text(text)
+
+    def _fixed_chunk_text(self, text: str) -> List[str]:
+        """
+        Split text into fixed-size chunks suitable for embedding.
 
         Each chunk is approximately MAX_CHUNK_TOKENS words.
         We use word-based chunking with overlap for context continuity.
@@ -74,6 +130,103 @@ class VectorIndex:
                 chunks.append(chunk)
 
         return chunks
+
+    def _split_into_sentences(self, text: str) -> List[str]:
+        """Split text into sentence-like units for semantic chunking."""
+        if not text:
+            return []
+
+        blocks = [b.strip() for b in re.split(r"\n+", text) if b.strip()]
+        sentences: List[str] = []
+
+        for block in blocks:
+            parts = re.split(r"(?<=[.!?।॥])\s+", block)
+            for part in parts:
+                clean = re.sub(r"\s+", " ", part).strip()
+                if clean:
+                    sentences.append(clean)
+
+        return sentences
+
+    def _split_long_text_by_words(self, text: str) -> List[str]:
+        """Fallback splitter for very long sentence-like spans."""
+        words = text.split()
+        if len(words) <= MAX_CHUNK_TOKENS:
+            return [text] if text.strip() else []
+
+        stride = max(1, MAX_CHUNK_TOKENS - 50)
+        chunks = []
+        for i in range(0, len(words), stride):
+            piece = " ".join(words[i : i + MAX_CHUNK_TOKENS]).strip()
+            if piece:
+                chunks.append(piece)
+        return chunks
+
+    def _semantic_chunk_text(self, text: str) -> List[str]:
+        """
+        Semantic chunking using sentence-transformer similarity between adjacent sentences.
+
+        Boundary rule:
+        - Split when adjacent sentence similarity drops below threshold, or
+        - Split when chunk would exceed MAX_CHUNK_TOKENS.
+        """
+        sentences = self._split_into_sentences(text)
+        if not sentences:
+            return []
+
+        if len(sentences) == 1 or self.model is None:
+            return self._fixed_chunk_text(text)
+
+        sent_inputs = [self._embed_text(s, is_query=False) for s in sentences]
+        sent_emb = self.model.encode(
+            sent_inputs,
+            show_progress_bar=False,
+            normalize_embeddings=True,
+        ).astype("float32")
+
+        similarities = np.sum(sent_emb[:-1] * sent_emb[1:], axis=1)
+
+        threshold = float(SEMANTIC_CHUNK_SIMILARITY_THRESHOLD)
+        min_tokens = max(1, int(SEMANTIC_CHUNK_MIN_TOKENS))
+        overlap_sentences = max(0, int(SEMANTIC_CHUNK_OVERLAP_SENTENCES))
+
+        chunks: List[str] = []
+        current_sentences: List[str] = [sentences[0]]
+        current_tokens = len(sentences[0].split())
+
+        for i in range(1, len(sentences)):
+            sentence = sentences[i]
+            sentence_tokens = len(sentence.split())
+            similarity = float(similarities[i - 1]) if (i - 1) < len(similarities) else 1.0
+
+            if sentence_tokens > MAX_CHUNK_TOKENS:
+                if current_sentences:
+                    chunks.append(" ".join(current_sentences).strip())
+                chunks.extend(self._split_long_text_by_words(sentence))
+                current_sentences = []
+                current_tokens = 0
+                continue
+
+            would_exceed_size = (current_tokens + sentence_tokens) > MAX_CHUNK_TOKENS
+            topic_shift = similarity < threshold and current_tokens >= min_tokens
+
+            if (would_exceed_size or topic_shift) and current_sentences:
+                chunks.append(" ".join(current_sentences).strip())
+
+                if overlap_sentences > 0:
+                    current_sentences = current_sentences[-overlap_sentences:]
+                else:
+                    current_sentences = []
+
+                current_tokens = sum(len(s.split()) for s in current_sentences)
+
+            current_sentences.append(sentence)
+            current_tokens += sentence_tokens
+
+        if current_sentences:
+            chunks.append(" ".join(current_sentences).strip())
+
+        return [c for c in chunks if c]
 
     def build(self, documents: List[dict], progress_callback=None):
         """
@@ -108,7 +261,10 @@ class VectorIndex:
         all_embeddings = []
 
         for i in range(0, len(all_chunks), batch_size):
-            batch = all_chunks[i : i + batch_size]
+            batch = [
+                self._embed_text(chunk, is_query=False)
+                for chunk in all_chunks[i : i + batch_size]
+            ]
             embeddings = self.model.encode(
                 batch, show_progress_bar=False, normalize_embeddings=True
             )
@@ -124,16 +280,46 @@ class VectorIndex:
         self.vectors = np.vstack(all_embeddings).astype("float32")
 
         # Build FAISS index (Inner Product = cosine similarity for normalized vectors)
-        self.index = faiss.IndexFlatIP(EMBEDDING_DIMENSION)
+        self.index = self._create_faiss_index()
         self.index.add(self.vectors)
 
         # Compute document-level vectors (mean of all chunk vectors per doc)
         self._compute_doc_vectors()
 
         logger.info(
-            f"Built FAISS index: {self.index.ntotal} vectors, "
-            f"{EMBEDDING_DIMENSION} dimensions"
+            "Built FAISS %s index: %s vectors, %s dimensions",
+            FAISS_INDEX_TYPE,
+            self.index.ntotal,
+            EMBEDDING_DIMENSION,
         )
+
+    def _create_faiss_index(self):
+        """Create FAISS index based on config."""
+        import faiss
+
+        index_type = (FAISS_INDEX_TYPE or "flat").strip().lower()
+        if index_type == "hnsw":
+            # HNSW with Inner Product for normalized vectors (cosine similarity).
+            index = faiss.index_factory(
+                EMBEDDING_DIMENSION,
+                f"HNSW{FAISS_HNSW_M},Flat",
+                faiss.METRIC_INNER_PRODUCT,
+            )
+            index.hnsw.efConstruction = max(16, int(FAISS_HNSW_EF_CONSTRUCTION))
+            index.hnsw.efSearch = max(8, int(FAISS_HNSW_EF_SEARCH))
+            logger.info(
+                "Using FAISS HNSW index (M=%s, efConstruction=%s, efSearch=%s)",
+                FAISS_HNSW_M,
+                index.hnsw.efConstruction,
+                index.hnsw.efSearch,
+            )
+            return index
+
+        if index_type != "flat":
+            logger.warning("Unknown FAISS_INDEX_TYPE '%s'; falling back to flat", index_type)
+
+        logger.info("Using FAISS Flat index (exact search)")
+        return faiss.IndexFlatIP(EMBEDDING_DIMENSION)
 
     def _compute_doc_vectors(self):
         """Compute mean vector for each document from its chunk vectors."""
@@ -165,16 +351,30 @@ class VectorIndex:
             return []
 
         self.load_model()
+        self._apply_runtime_search_params()
 
         # Encode query
+        query_input = self._embed_text(query, is_query=True)
         query_vector = self.model.encode(
-            [query], normalize_embeddings=True
+            [query_input],
+            show_progress_bar=False,
+            normalize_embeddings=True,
         ).astype("float32")
 
-        # Search FAISS index
+        return self.search_by_vector(query_vector[0], top_k)
+
+    def search_by_vector(self, query_vector: np.ndarray, top_k: int = 10) -> List[Tuple[int, float]]:
+        """Search FAISS using a precomputed normalized query embedding."""
+        if self.index is None or self.index.ntotal == 0:
+            return []
+
+        self._apply_runtime_search_params()
+
+        q = np.asarray(query_vector, dtype="float32").reshape(1, -1)
+
         # Request more results than top_k since multiple chunks may be from same doc
         n_search = min(top_k * 5, self.index.ntotal)
-        scores, indices = self.index.search(query_vector, n_search)
+        scores, indices = self.index.search(q, n_search)
 
         # Aggregate scores per document (take max chunk score per doc)
         doc_scores = {}
@@ -185,15 +385,17 @@ class VectorIndex:
             if doc_id not in doc_scores or score > doc_scores[doc_id]:
                 doc_scores[doc_id] = float(score)
 
-        # Sort by score descending
         ranked = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
         return ranked[:top_k]
 
     def encode_query(self, query: str) -> np.ndarray:
         """Encode a query string into a vector."""
         self.load_model()
+        query_input = self._embed_text(query, is_query=True)
         return self.model.encode(
-            [query], normalize_embeddings=True
+            [query_input],
+            show_progress_bar=False,
+            normalize_embeddings=True,
         ).astype("float32")[0]
 
     def get_doc_vector(self, doc_id: int) -> Optional[np.ndarray]:
@@ -220,6 +422,12 @@ class VectorIndex:
             "doc_vectors": {
                 k: v.tolist() for k, v in self.doc_vectors.items()
             },
+            "faiss_index_type": FAISS_INDEX_TYPE,
+            "hnsw": {
+                "m": FAISS_HNSW_M,
+                "ef_construction": FAISS_HNSW_EF_CONSTRUCTION,
+                "ef_search": FAISS_HNSW_EF_SEARCH,
+            },
         }
         with open(metadata_path, "wb") as f:
             pickle.dump(metadata, f)
@@ -241,4 +449,15 @@ class VectorIndex:
             for k, v in metadata["doc_vectors"].items()
         }
 
+        self._apply_runtime_search_params()
+
         logger.info(f"Loaded FAISS index with {self.index.ntotal} vectors")
+
+    def _apply_runtime_search_params(self):
+        """Apply runtime FAISS search params (mainly for HNSW)."""
+        if self.index is None:
+            return
+
+        hnsw = getattr(self.index, "hnsw", None)
+        if hnsw is not None:
+            hnsw.efSearch = max(8, int(FAISS_HNSW_EF_SEARCH))

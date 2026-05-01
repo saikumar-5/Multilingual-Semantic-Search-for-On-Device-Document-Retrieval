@@ -36,8 +36,6 @@ class ImageOCR:
         Returns:
             dict with keys: 'text', 'metadata', 'file_path', 'file_type'
         """
-        from PIL import Image
-
         file_path = Path(file_path)
         result = {
             "file_path": str(file_path),
@@ -48,6 +46,8 @@ class ImageOCR:
         }
 
         try:
+            from PIL import Image
+
             img = Image.open(str(file_path))
             # Preprocess image for better OCR accuracy
             img = self._preprocess_image(img)
@@ -84,9 +84,9 @@ class ImageOCR:
 
     def extract_from_bytes(self, image_bytes: bytes) -> str:
         """Extract text from raw image bytes (used for PDF page images)."""
-        from PIL import Image
-
         try:
+            from PIL import Image
+
             img = Image.open(BytesIO(image_bytes))
             img = self._preprocess_image(img)
             text = self._pytesseract.image_to_string(img, lang=self.languages)
@@ -97,7 +97,7 @@ class ImageOCR:
 
     def _preprocess_image(self, img):
         """Preprocess image for better OCR accuracy."""
-        from PIL import Image, ImageEnhance, ImageFilter
+        from PIL import ImageEnhance, ImageFilter
 
         # Convert to RGB if necessary
         if img.mode not in ("RGB", "L"):

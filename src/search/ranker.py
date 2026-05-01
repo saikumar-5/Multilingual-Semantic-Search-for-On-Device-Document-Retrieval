@@ -38,8 +38,12 @@ class Ranker:
                 'rank', 'doc_id', 'score', 'file_name', 'file_path',
                 'file_type', 'snippet', 'language'
         """
+        raw_scores = [float(score) for _, score in ranked_results]
+        display_scores = self._normalize_display_scores(raw_scores)
+
         results = []
-        for rank, (doc_id, score) in enumerate(ranked_results, 1):
+        for i, (doc_id, score) in enumerate(ranked_results):
+            rank = i + 1
             doc = self.doc_lookup.get(doc_id)
             if doc is None:
                 continue
@@ -50,7 +54,9 @@ class Ranker:
             results.append({
                 "rank": rank,
                 "doc_id": doc_id,
-                "score": round(score, 4),
+                # Keep UI score in [0, 1] so percentage badges are meaningful.
+                "score": round(display_scores[i], 4) if i < len(display_scores) else 0.0,
+                "raw_score": round(float(score), 4),
                 "file_name": doc.get("file_name", "Unknown"),
                 "file_path": doc.get("file_path", ""),
                 "file_type": doc.get("file_type", "unknown"),
@@ -60,6 +66,22 @@ class Ranker:
             })
 
         return results
+
+    def _normalize_display_scores(self, raw_scores: List[float]) -> List[float]:
+        """Map heterogeneous backend scores to [0, 1] for UI display only."""
+        if not raw_scores:
+            return []
+
+        # If scores already look like probabilities/similarities, keep as-is.
+        if all(0.0 <= s <= 1.0 for s in raw_scores):
+            return [float(s) for s in raw_scores]
+
+        min_s = min(raw_scores)
+        max_s = max(raw_scores)
+        if max_s - min_s <= 1e-12:
+            return [0.5 for _ in raw_scores]
+
+        return [(float(s) - min_s) / (max_s - min_s) for s in raw_scores]
 
     def _extract_snippet(self, text: str, query: str, max_length: int = 200) -> str:
         """

@@ -85,20 +85,29 @@ class TFIDFEngine:
             f"Computed TF-IDF weights for {len(self.tfidf_weights)} documents"
         )
 
-    def get_query_vector(self, query_terms: List[str]) -> Dict[str, float]:
+    def get_query_vector(
+        self,
+        query_terms: List[str],
+        weighted_terms: Dict[str, float] | None = None,
+    ) -> Dict[str, float]:
         """
         Compute TF-IDF vector for a query.
 
         For queries, TF is simply the count of each term in the query.
         IDF values come from the document collection.
         """
-        term_counts = defaultdict(int)
-        for term in query_terms:
-            term_counts[term] += 1
+        term_counts = defaultdict(float)
+        if weighted_terms:
+            for term, weight in weighted_terms.items():
+                term_counts[term] += float(weight)
+        else:
+            for term in query_terms:
+                term_counts[term] += 1.0
 
         query_vector = {}
+        total_weight = sum(term_counts.values()) or 1.0
         for term, count in term_counts.items():
-            tf = count / len(query_terms)
+            tf = count / total_weight
             idf = self.idf_values.get(term, 0.0)
             query_vector[term] = tf * idf
 
@@ -134,7 +143,10 @@ class TFIDFEngine:
         return dot_product / (query_norm * doc_norm)
 
     def rank_documents(
-        self, query_terms: List[str], top_k: int = 10
+        self,
+        query_terms: List[str],
+        top_k: int = 10,
+        weighted_terms: Dict[str, float] | None = None,
     ) -> List[Tuple[int, float]]:
         """
         Rank all documents by TF-IDF cosine similarity to the query.
@@ -144,7 +156,7 @@ class TFIDFEngine:
 
         CO2/CO3 Alignment: Rank-based retrieval.
         """
-        query_vector = self.get_query_vector(query_terms)
+        query_vector = self.get_query_vector(query_terms, weighted_terms=weighted_terms)
 
         scores = []
         for doc_id in self.tfidf_weights:

@@ -13,6 +13,7 @@ This enables:
 
 from typing import List, Tuple
 import logging
+import numpy as np
 
 from src.indexer.vector_index import VectorIndex
 from src.search.query_processor import QueryProcessor
@@ -44,6 +45,13 @@ class SemanticSearch:
         Returns:
             List of (doc_id, similarity_score) tuples.
         """
+        parsed = self.query_processor.parse(query)
+        weighted_terms = parsed.get("weighted_terms", {})
+
+        # If expansions exist, compose a weighted query embedding so original terms dominate.
+        if parsed.get("expanded_terms") and weighted_terms:
+            return self._search_with_weighted_terms(weighted_terms, top_k)
+
         # Clean query for embedding (remove Boolean operators etc.)
         clean_query = self.query_processor.get_raw_text_for_embedding(query)
 
@@ -52,6 +60,33 @@ class SemanticSearch:
 
         results = self.vector_index.search(clean_query, top_k)
         return results
+
+    def _search_with_weighted_terms(
+        self,
+        weighted_terms: dict,
+        top_k: int,
+    ) -> List[Tuple[int, float]]:
+        vectors = []
+        weights = []
+
+        for term, weight in weighted_terms.items():
+            if not term or float(weight) <= 0:
+                continue
+            vectors.append(self.vector_index.encode_query(term))
+            weights.append(float(weight))
+
+        if not vectors:
+            return []
+
+        mat = np.vstack(vectors).astype("float32")
+        w = np.asarray(weights, dtype="float32").reshape(-1, 1)
+        q = (mat * w).sum(axis=0)
+
+        norm = float(np.linalg.norm(q))
+        if norm > 0:
+            q = q / norm
+
+        return self.vector_index.search_by_vector(q, top_k)
 
     def search_with_language_info(
         self, query: str, top_k: int = 10

@@ -15,14 +15,18 @@ class SettingsFrame(ctk.CTkFrame):
         indexed_dirs: List[str],
         on_add_directory: Callable,
         on_reindex: Callable,
+        on_reset: Callable,
         on_mode_change: Callable,
         current_mode: str = "hybrid",
     ):
-        super().__init__(parent, fg_color=("gray94", "gray14"), corner_radius=12)
+        super().__init__(parent, fg_color=("#151c2f", "#151c2f"), corner_radius=14)
 
         self.on_add_directory = on_add_directory
         self.on_reindex = on_reindex
+        self.on_reset = on_reset
         self.on_mode_change = on_mode_change
+        self.current_mode = current_mode
+        self._switches = {}
 
         self._create_widgets(indexed_dirs, current_mode)
 
@@ -31,44 +35,66 @@ class SettingsFrame(ctk.CTkFrame):
         mode_header = ctk.CTkLabel(
             self,
             text="Search Mode",
-            font=ctk.CTkFont(size=14, weight="bold"),
+            font=ctk.CTkFont(family="Segoe UI", size=24, weight="bold"),
+            text_color=("#d9e6ff", "#d9e6ff"),
         )
-        mode_header.pack(pady=(18, 8), padx=16, anchor="w")
+        mode_header.pack(pady=(16, 10), padx=18, anchor="w")
 
         self.mode_var = ctk.StringVar(value=current_mode)
 
         modes = [
-            ("Hybrid", "hybrid", "Keyword + Semantic combined"),
-            ("Keyword", "keyword", "TF-IDF exact matching"),
-            ("Semantic", "semantic", "AI meaning-based search"),
+            ("Hybrid", "hybrid", "Search mode for custom hybrid retrieval."),
+            ("Keyword", "keyword", "Keyword search for exact matches."),
+            ("Semantic", "semantic", "Semantic search for meaning-based matches."),
         ]
 
         for label, value, tooltip in modes:
-            btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-            btn_frame.pack(fill="x", padx=16, pady=1)
-
-            rb = ctk.CTkRadioButton(
-                btn_frame,
-                text=label,
-                variable=self.mode_var,
-                value=value,
-                command=lambda: self.on_mode_change(self.mode_var.get()),
-                font=ctk.CTkFont(size=13),
-                radiobutton_width=18,
-                radiobutton_height=18,
+            mode_row = ctk.CTkFrame(
+                self,
+                fg_color=("#1a2238", "#1a2238"),
+                corner_radius=10,
+                border_width=1,
+                border_color=("#26345a", "#26345a"),
             )
-            rb.pack(side="left")
+            mode_row.pack(fill="x", padx=16, pady=5)
+
+            text_col = ctk.CTkFrame(mode_row, fg_color="transparent")
+            text_col.pack(side="left", fill="x", expand=True, padx=(10, 6), pady=8)
+
+            title = ctk.CTkLabel(
+                text_col,
+                text=label,
+                font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
+                text_color=("#e3ecff", "#e3ecff"),
+                anchor="w",
+            )
+            title.pack(fill="x")
 
             hint = ctk.CTkLabel(
-                btn_frame,
+                text_col,
                 text=tooltip,
-                font=ctk.CTkFont(size=9),
-                text_color="gray50",
+                font=ctk.CTkFont(size=11),
+                text_color=("#91a0c6", "#91a0c6"),
+                anchor="w",
             )
-            hint.pack(side="right", padx=(0, 4))
+            hint.pack(fill="x")
 
-        # ── Separator ────────────────────────────────────────
-        ctk.CTkFrame(self, height=1, fg_color="gray35").pack(
+            switch = ctk.CTkSwitch(
+                mode_row,
+                text="",
+                width=40,
+                command=lambda m=value: self._set_mode(m),
+                onvalue=1,
+                offvalue=0,
+                button_color=("#cfe3ff", "#cfe3ff"),
+                progress_color=("#2fb8ff", "#2fb8ff"),
+            )
+            switch.pack(side="right", padx=(6, 12))
+            self._switches[value] = switch
+
+        self._sync_mode_switches(current_mode)
+
+        ctk.CTkFrame(self, height=1, fg_color=("#2b3658", "#2b3658")).pack(
             fill="x", padx=16, pady=14
         )
 
@@ -76,17 +102,21 @@ class SettingsFrame(ctk.CTkFrame):
         dir_header = ctk.CTkLabel(
             self,
             text="Indexed Folders",
-            font=ctk.CTkFont(size=14, weight="bold"),
+            font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
+            text_color=("#d9e6ff", "#d9e6ff"),
         )
-        dir_header.pack(pady=(0, 6), padx=16, anchor="w")
+        dir_header.pack(pady=(0, 8), padx=16, anchor="w")
 
         self.dir_list = ctk.CTkTextbox(
             self,
-            height=110,
+            height=120,
             state="disabled",
             font=ctk.CTkFont(family="Consolas", size=10),
-            fg_color=("gray88", "gray18"),
-            corner_radius=8,
+            fg_color=("#202a44", "#202a44"),
+            border_width=1,
+            border_color=("#2b3658", "#2b3658"),
+            text_color=("#c7d4f4", "#c7d4f4"),
+            corner_radius=10,
         )
         self.dir_list.pack(fill="x", padx=16, pady=(0, 8))
         self.update_directories(indexed_dirs)
@@ -99,11 +129,12 @@ class SettingsFrame(ctk.CTkFrame):
             btn_frame,
             text="+ Add Folder",
             command=self.on_add_directory,
-            height=32,
-            corner_radius=8,
+            height=36,
+            corner_radius=10,
             font=ctk.CTkFont(size=12, weight="bold"),
-            fg_color=("#2b7a0b", "#2b7a0b"),
-            hover_color=("#1e5a08", "#3a9c14"),
+            fg_color=("#00a5ff", "#00a5ff"),
+            hover_color=("#068fdb", "#32bcff"),
+            text_color="white",
         )
         add_btn.pack(side="left", fill="x", expand=True, padx=(0, 4))
 
@@ -111,25 +142,37 @@ class SettingsFrame(ctk.CTkFrame):
             btn_frame,
             text="Re-Index",
             command=self.on_reindex,
-            height=32,
-            corner_radius=8,
+            height=36,
+            corner_radius=10,
             font=ctk.CTkFont(size=12, weight="bold"),
-            fg_color=("#e67e22", "#e67e22"),
-            hover_color=("#d35400", "#f0932b"),
+            fg_color=("#ff8a00", "#ff8a00"),
+            hover_color=("#dd7400", "#ff9f2f"),
+            text_color="white",
         )
         reindex_btn.pack(side="right", fill="x", expand=True, padx=(4, 0))
 
-        # ── Separator ────────────────────────────────────────
-        ctk.CTkFrame(self, height=1, fg_color="gray35").pack(
-            fill="x", padx=16, pady=14
+        reset_btn = ctk.CTkButton(
+            self,
+            text="Reset App",
+            command=self.on_reset,
+            height=34,
+            corner_radius=10,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=("#c7342c", "#c7342c"),
+            hover_color=("#a92a23", "#d94941"),
+        )
+        reset_btn.pack(fill="x", padx=16, pady=(4, 6))
+
+        ctk.CTkFrame(self, height=1, fg_color=("#2b3658", "#2b3658")).pack(
+            fill="x", padx=16, pady=12
         )
 
         # ── Stats ────────────────────────────────────────────
         self.stats_label = ctk.CTkLabel(
             self,
             text="",
-            font=ctk.CTkFont(size=11),
-            text_color="gray50",
+            font=ctk.CTkFont(size=12),
+            text_color=("#90a0c9", "#90a0c9"),
             justify="left",
         )
         self.stats_label.pack(padx=16, anchor="w")
@@ -145,7 +188,7 @@ class SettingsFrame(ctk.CTkFrame):
             about_frame,
             text="DocSearch v1.0",
             font=ctk.CTkFont(size=11, weight="bold"),
-            text_color="gray45",
+            text_color=("#6f80aa", "#6f80aa"),
         ).pack(anchor="w")
         # ctk.CTkLabel(
         #     about_frame,
@@ -173,3 +216,21 @@ class SettingsFrame(ctk.CTkFrame):
         self.stats_label.configure(
             text=f"Documents: {num_docs}\nTerms: {num_terms:,}"
         )
+
+    def _sync_mode_switches(self, active_mode: str):
+        for mode, switch in self._switches.items():
+            if mode == active_mode:
+                switch.select()
+            else:
+                switch.deselect()
+
+    def _set_mode(self, mode: str):
+        # Keep a single active mode (exclusive toggle behavior)
+        if self.current_mode == mode and self._switches[mode].get() == 0:
+            self._switches[mode].select()
+            return
+
+        self.current_mode = mode
+        self.mode_var.set(mode)
+        self._sync_mode_switches(mode)
+        self.on_mode_change(mode)
