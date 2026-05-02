@@ -11,6 +11,7 @@ import logging
 from src.indexer.inverted_index import InvertedIndex
 from src.indexer.tfidf import TFIDFEngine
 from src.search.query_processor import QueryProcessor
+from src.config import PHRASE_BOOST, PHRASE_BOOST_TERMS
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class KeywordSearch:
             return self._ranked_search(
                 parsed["terms"],
                 top_k,
+                raw_query=parsed["raw"],
                 weighted_terms=parsed.get("weighted_terms"),
             )
 
@@ -56,10 +58,28 @@ class KeywordSearch:
         self,
         terms: List[str],
         top_k: int,
+        raw_query: str,
         weighted_terms=None,
     ) -> List[Tuple[int, float]]:
         """Free-text search with TF-IDF cosine similarity ranking."""
-        return self.tfidf.rank_documents(terms, top_k, weighted_terms=weighted_terms)
+        ranked = self.tfidf.rank_documents(terms, top_k, weighted_terms=weighted_terms)
+        if not ranked:
+            return ranked
+
+        query_lower = (raw_query or "").lower()
+        phrases = [p for p in PHRASE_BOOST_TERMS if p in query_lower]
+        if not phrases:
+            return ranked
+
+        scores = {doc_id: score for doc_id, score in ranked}
+        for phrase in phrases:
+            matches = self.inv_index.phrase_search(phrase)
+            for doc_id in matches:
+                if doc_id in scores:
+                    scores[doc_id] += float(PHRASE_BOOST)
+
+        boosted = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return boosted[:top_k]
 
     def _boolean_search(
         self, query: str, top_k: int

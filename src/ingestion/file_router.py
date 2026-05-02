@@ -10,7 +10,13 @@ from pathlib import Path
 from typing import List
 import logging
 
-from src.config import SUPPORTED_EXTENSIONS, TESSERACT_CMD, OCR_LANGUAGES
+from src.config import (
+    SUPPORTED_EXTENSIONS,
+    PADDLE_OCR_LANGS,
+    ENABLE_FILENAME_INJECTION,
+    ENABLE_FILENAME_TAGS,
+    FILENAME_TAGS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +34,10 @@ class FileRouter:
         # Initialize OCR engine (used by both image and PDF parsers)
         try:
             self.ocr_engine = ImageOCR(
-                tesseract_cmd=TESSERACT_CMD, languages=OCR_LANGUAGES
+                ocr_langs=PADDLE_OCR_LANGS,
             )
         except Exception as e:
-            logger.warning(f"Tesseract not available, OCR disabled: {e}")
+            logger.warning(f"OCR engine not available, OCR disabled: {e}")
             self.ocr_engine = None
 
         # Initialize parsers
@@ -73,6 +79,8 @@ class FileRouter:
         try:
             result = parser.extract(file_path)
             if result and result.get("text", "").strip():
+                if ENABLE_FILENAME_INJECTION:
+                    self._inject_filename_terms(result, file_path)
                 logger.info(
                     f"Extracted {len(result['text'])} chars from {file_path.name}"
                 )
@@ -83,6 +91,64 @@ class FileRouter:
         except Exception as e:
             logger.error(f"Failed to process {file_path}: {e}")
             return None
+
+    def _inject_filename_terms(self, result: dict, file_path: Path):
+        """Append normalized file name tokens and tag hints into text."""
+        stem = file_path.stem.lower()
+        normalized = (
+            stem.replace("_", " ")
+            .replace("-", " ")
+            .replace(".", " ")
+        )
+        normalized = " ".join(normalized.split())
+
+        tags = []
+        enrich_terms = []
+        if ENABLE_FILENAME_TAGS and normalized:
+            tokens = set(normalized.split())
+            for token in list(tokens):
+                for tag in FILENAME_TAGS.get(token, []):
+                    if tag not in tags:
+                        tags.append(tag)
+                if token == "id":
+                    for term in (
+                        "id card",
+                        "identity",
+                        "identity card",
+                        "student",
+                        "student id",
+                    ):
+                        if term not in enrich_terms:
+                            enrich_terms.append(term)
+                if token == "electricity":
+                    for term in ("electricity", "power", "bill"):
+                        if term not in enrich_terms:
+                            enrich_terms.append(term)
+                if token == "permission":
+                    for term in (
+                        "permission",
+                        "approval",
+                        "permit",
+                        "house permission",
+                        "building permit",
+                    ):
+                        if term not in enrich_terms:
+                            enrich_terms.append(term)
+                if token == "environment":
+                    for term in ("environment", "pollution", "environmental"):
+                        if term not in enrich_terms:
+                            enrich_terms.append(term)
+
+        additions = []
+        if normalized:
+            additions.append(normalized)
+        if tags:
+            additions.append(" ".join(tags))
+        if enrich_terms:
+            additions.append(" ".join(enrich_terms))
+
+        if additions:
+            result["text"] = f"{result.get('text', '')}\n\n" + " ".join(additions)
 
     def scan_directory(self, directory: str) -> List[Path]:
         """

@@ -7,9 +7,10 @@ results produced by first-stage retrieval (hybrid fusion).
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import logging
 import re
+from pathlib import Path
 
 import numpy as np
 
@@ -33,14 +34,20 @@ class CrossEncoderReranker:
         self,
         documents: List[dict],
         model_name: str = CROSS_ENCODER_MODEL_NAME,
+        model_local_dir: Optional[Path] = None,
         top_candidates: int = CROSS_ENCODER_CANDIDATES,
         batch_size: int = CROSS_ENCODER_BATCH_SIZE,
         max_length: int = CROSS_ENCODER_MAX_LENGTH,
+        offline_mode: bool = OFFLINE_MODE,
+        device: str = "cpu",
     ):
         self.model_name = model_name
+        self.model_local_dir = model_local_dir
         self.top_candidates = max(1, top_candidates)
         self.batch_size = max(1, batch_size)
         self.max_length = max(32, max_length)
+        self.offline_mode = offline_mode
+        self.device = device
 
         # Store compact text per doc_id for fast pair construction.
         self.doc_text: Dict[int, str] = {
@@ -141,17 +148,18 @@ class CrossEncoderReranker:
             model_source = self.model_name
             local_files_only = False
 
-            if CROSS_ENCODER_MODEL_LOCAL_DIR.exists():
-                model_source = str(CROSS_ENCODER_MODEL_LOCAL_DIR)
+            local_dir = self.model_local_dir or CROSS_ENCODER_MODEL_LOCAL_DIR
+            if local_dir and local_dir.exists():
+                model_source = str(local_dir)
                 local_files_only = True
-            elif OFFLINE_MODE:
+            elif self.offline_mode:
                 raise FileNotFoundError(
-                    f"Offline mode enabled but cross-encoder model not found at: {CROSS_ENCODER_MODEL_LOCAL_DIR}"
+                    f"Offline mode enabled but cross-encoder model not found at: {local_dir}"
                 )
 
             self._model = CrossEncoder(
                 model_source,
-                device="cpu",
+                device=self.device,
                 max_length=self.max_length,
                 local_files_only=local_files_only,
             )

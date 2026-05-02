@@ -42,6 +42,15 @@ class EvaluationMetrics:
             self.test_queries = json.load(f)
         logger.info(f"Loaded {len(self.test_queries)} test queries")
 
+    @staticmethod
+    def _normalize_name(name: str) -> str:
+        """Normalize filenames for evaluation matching."""
+        if not name:
+            return ""
+        stem = Path(name).stem.lower()
+        normalized = stem.replace("_", " ").replace("-", " ")
+        return " ".join(normalized.split())
+
     def precision_at_k(
         self, retrieved: List[str], relevant: List[str], k: int
     ) -> float:
@@ -144,22 +153,31 @@ class EvaluationMetrics:
         if k_values is None:
             k_values = [5, 10]
 
+        normalized_retrieved = [self._normalize_name(doc) for doc in retrieved_docs]
+        normalized_relevant = [self._normalize_name(doc) for doc in relevant_docs]
+
         result = {
             "query": query,
             "num_retrieved": len(retrieved_docs),
             "num_relevant": len(relevant_docs),
-            "reciprocal_rank": self.reciprocal_rank(retrieved_docs, relevant_docs),
-            "average_precision": self.average_precision(retrieved_docs, relevant_docs),
+            "reciprocal_rank": self.reciprocal_rank(
+                normalized_retrieved, normalized_relevant
+            ),
+            "average_precision": self.average_precision(
+                normalized_retrieved, normalized_relevant
+            ),
         }
 
         for k in k_values:
             result[f"precision@{k}"] = self.precision_at_k(
-                retrieved_docs, relevant_docs, k
+                normalized_retrieved, normalized_relevant, k
             )
             result[f"recall@{k}"] = self.recall_at_k(
-                retrieved_docs, relevant_docs, k
+                normalized_retrieved, normalized_relevant, k
             )
-            result[f"f1@{k}"] = self.f1_at_k(retrieved_docs, relevant_docs, k)
+            result[f"f1@{k}"] = self.f1_at_k(
+                normalized_retrieved, normalized_relevant, k
+            )
 
         return result
 

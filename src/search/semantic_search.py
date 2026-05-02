@@ -48,8 +48,8 @@ class SemanticSearch:
         parsed = self.query_processor.parse(query)
         weighted_terms = parsed.get("weighted_terms", {})
 
-        # If expansions exist, compose a weighted query embedding so original terms dominate.
-        if parsed.get("expanded_terms") and weighted_terms:
+        # If intent/expansions exist, compose a weighted query embedding so original terms dominate.
+        if parsed.get("use_weighted_embedding") and weighted_terms:
             return self._search_with_weighted_terms(weighted_terms, top_k)
 
         # Clean query for embedding (remove Boolean operators etc.)

@@ -1,5 +1,5 @@
 """
-Image OCR using pytesseract + Pillow.
+Image OCR using Tesseract.
 Extracts text from images (JPG, PNG, AVIF, etc.) and scanned PDF pages.
 Supports English, Hindi, and Telugu OCR.
 
@@ -9,25 +9,34 @@ CO1 Alignment: Document Representation - extracting text from image-based docume
 from pathlib import Path
 from io import BytesIO
 import logging
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
 class ImageOCR:
-    """Extract text from images using Tesseract OCR."""
+    """Extract text from images using Tesseract."""
 
-    def __init__(self, tesseract_cmd: str = None, languages: str = "eng+hin+tel"):
+    def __init__(
+        self,
+        ocr_langs: Optional[List[str]] = None,
+        tesseract_config: Optional[str] = None,
+    ):
         """
         Args:
-            tesseract_cmd: Path to tesseract executable.
-            languages: OCR language string (e.g., 'eng+hin+tel').
+            ocr_langs: Language codes (e.g., ['en', 'hi', 'te']).
+            tesseract_config: Optional config string for Tesseract.
         """
-        import pytesseract
+        self.ocr_langs = ocr_langs or ["en"]
+        self._tesseract_config = tesseract_config or ""
+        self._tesseract_lang = self._build_lang_string(self.ocr_langs)
 
-        if tesseract_cmd:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
-        self.languages = languages
-        self._pytesseract = pytesseract
+        try:
+            import pytesseract
+
+            self._pytesseract = pytesseract
+        except Exception as e:
+            raise RuntimeError(f"Tesseract OCR not available: {e}")
 
     def extract(self, file_path: Path) -> dict:
         """
@@ -49,31 +58,14 @@ class ImageOCR:
             from PIL import Image
 
             img = Image.open(str(file_path))
-            # Preprocess image for better OCR accuracy
             img = self._preprocess_image(img)
 
-            # Run OCR
-            ocr_data = self._pytesseract.image_to_data(
-                img, lang=self.languages, output_type=self._pytesseract.Output.DICT
-            )
-
-            # Extract text with confidence filtering
-            words = []
-            confidences = []
-            for i, word in enumerate(ocr_data["text"]):
-                conf = int(ocr_data["conf"][i])
-                if word.strip() and conf > 30:  # Filter low-confidence words
-                    words.append(word.strip())
-                    confidences.append(conf)
-
-            result["text"] = " ".join(words)
+            text, meta = self._run_ocr(img)
+            result["text"] = text
             result["metadata"] = {
                 "width": img.width,
                 "height": img.height,
-                "avg_confidence": (
-                    sum(confidences) / len(confidences) if confidences else 0
-                ),
-                "word_count": len(words),
+                **meta,
             }
 
         except Exception as e:
@@ -89,11 +81,66 @@ class ImageOCR:
 
             img = Image.open(BytesIO(image_bytes))
             img = self._preprocess_image(img)
-            text = self._pytesseract.image_to_string(img, lang=self.languages)
+            text, _meta = self._run_ocr(img)
             return text.strip()
         except Exception as e:
             logger.warning(f"OCR from bytes failed: {e}")
             return ""
+
+    def extract_from_image(self, img) -> str:
+        """Extract text from a PIL image object."""
+        try:
+            img = self._preprocess_image(img)
+            text, _meta = self._run_ocr(img)
+            return text.strip()
+        except Exception as e:
+            logger.warning(f"OCR from image failed: {e}")
+            return ""
+
+    def _run_ocr(self, img) -> Tuple[str, Dict[str, float]]:
+        """Run OCR with the configured engine and return text + metadata."""
+        return self._run_tesseract(img)
+
+    def _run_tesseract(self, img) -> Tuple[str, Dict[str, float]]:
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+
+        data = self._pytesseract.image_to_data(
+            img,
+            lang=self._tesseract_lang,
+            config=self._tesseract_config,
+            output_type=self._pytesseract.Output.DICT,
+        )
+
+        texts = []
+        confs = []
+        for text, conf in zip(data.get("text", []), data.get("conf", [])):
+            if text and text.strip():
+                texts.append(text.strip())
+            if conf not in (None, "", "-1"):
+                try:
+                    confs.append(float(conf))
+                except ValueError:
+                    continue
+
+        avg_conf = sum(confs) / len(confs) if confs else 0.0
+        return (
+            " ".join(texts),
+            {
+                "avg_confidence": avg_conf,
+                "word_count": len(texts),
+                "engine": "tesseract",
+            },
+        )
+
+    def _build_lang_string(self, langs: List[str]) -> str:
+        lang_map = {
+            "en": "eng",
+            "hi": "hin",
+            "te": "tel",
+        }
+        mapped = [lang_map.get(lang, lang) for lang in langs]
+        return "+".join(mapped)
 
     def _preprocess_image(self, img):
         """Preprocess image for better OCR accuracy."""

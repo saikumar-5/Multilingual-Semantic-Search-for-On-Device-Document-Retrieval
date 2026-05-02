@@ -32,6 +32,12 @@ from src.config import (
     ENABLE_CROSS_ENCODER_RERANK,
     CROSS_ENCODER_CANDIDATES,
     CROSS_ENCODER_TOP_K,
+    CROSS_ENCODER_MODEL_NAME,
+    CROSS_ENCODER_MODEL_LOCAL_DIR,
+    MULTILINGUAL_CROSS_ENCODER_MODEL_NAME,
+    MULTILINGUAL_CROSS_ENCODER_MODEL_LOCAL_DIR,
+    USE_MULTILINGUAL_CROSS_ENCODER,
+    OFFLINE_MODE,
     load_settings,
     save_settings,
 )
@@ -145,6 +151,25 @@ class DocSearchApp(ctk.CTk):
         self.progress_bar.set(0)
 
         self._switch_page("dashboard")
+
+    def _resolve_reranker_config(self):
+        if not USE_MULTILINGUAL_CROSS_ENCODER:
+            return CROSS_ENCODER_MODEL_NAME, CROSS_ENCODER_MODEL_LOCAL_DIR, True
+
+        multilingual_available = (
+            MULTILINGUAL_CROSS_ENCODER_MODEL_LOCAL_DIR.exists() or not OFFLINE_MODE
+        )
+        if multilingual_available:
+            return (
+                MULTILINGUAL_CROSS_ENCODER_MODEL_NAME,
+                MULTILINGUAL_CROSS_ENCODER_MODEL_LOCAL_DIR,
+                False,
+            )
+
+        logger.warning(
+            "Multilingual reranker enabled but model not available; falling back to English-only reranker."
+        )
+        return CROSS_ENCODER_MODEL_NAME, CROSS_ENCODER_MODEL_LOCAL_DIR, True
 
     def _create_content_pages(self):
         self.pages = {}
@@ -707,15 +732,23 @@ class DocSearchApp(ctk.CTk):
             self.semantic_search = SemanticSearch(self.vector_index)
             self.cross_encoder_reranker = None
             if ENABLE_CROSS_ENCODER_RERANK:
+                model_name, model_local_dir, rerank_english_only = (
+                    self._resolve_reranker_config()
+                )
                 self.cross_encoder_reranker = CrossEncoderReranker(
                     all_documents,
+                    model_name=model_name,
+                    model_local_dir=model_local_dir,
                     top_candidates=CROSS_ENCODER_CANDIDATES,
                 )
+            else:
+                rerank_english_only = True
             self.hybrid_search = HybridSearch(
                 self.keyword_search,
                 self.semantic_search,
                 reranker=self.cross_encoder_reranker,
                 rerank_candidates=CROSS_ENCODER_CANDIDATES,
+                rerank_english_only=rerank_english_only,
             )
             self.wildcard_search = WildcardSearch(self.inv_index, self.tfidf_engine)
             self.wildcard_search.build()
@@ -889,16 +922,24 @@ class DocSearchApp(ctk.CTk):
         self.semantic_search = SemanticSearch(self.vector_index)
         self.cross_encoder_reranker = None
         if ENABLE_CROSS_ENCODER_RERANK:
+            model_name, model_local_dir, rerank_english_only = (
+                self._resolve_reranker_config()
+            )
             self.cross_encoder_reranker = CrossEncoderReranker(
                 self.documents,
+                model_name=model_name,
+                model_local_dir=model_local_dir,
                 top_candidates=CROSS_ENCODER_CANDIDATES,
             )
+        else:
+            rerank_english_only = True
 
         self.hybrid_search = HybridSearch(
             self.keyword_search,
             self.semantic_search,
             reranker=self.cross_encoder_reranker,
             rerank_candidates=CROSS_ENCODER_CANDIDATES,
+            rerank_english_only=rerank_english_only,
         )
         self.wildcard_search = WildcardSearch(self.inv_index, self.tfidf_engine)
         self.wildcard_search.build()

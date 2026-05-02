@@ -50,7 +50,7 @@ class VectorIndex:
     Queries are encoded the same way and matched via cosine similarity.
     """
 
-    def __init__(self):
+    def __init__(self, device: str = "cpu"):
         self.model = None
         self.index = None
         # Maps FAISS internal index → (doc_id, chunk_id)
@@ -60,6 +60,7 @@ class VectorIndex:
         # Unique doc-level vectors (mean of all chunk vectors per doc)
         self.doc_vectors: dict = {}
         self._model_loaded = False
+        self.device = device
 
     def load_model(self):
         """Load the sentence-transformer model into memory."""
@@ -87,7 +88,7 @@ class VectorIndex:
         logger.info(f"Loading embedding model from: {model_source}")
         self.model = SentenceTransformer(
             model_source,
-            device="cpu",
+            device=self.device,
             local_files_only=local_files_only,
         )
         self._model_loaded = True
@@ -140,13 +141,38 @@ class VectorIndex:
         sentences: List[str] = []
 
         for block in blocks:
-            parts = re.split(r"(?<=[.!?।॥])\s+", block)
-            for part in parts:
-                clean = re.sub(r"\s+", " ", part).strip()
-                if clean:
-                    sentences.append(clean)
+            lines = [l.strip() for l in block.split("\n") if l.strip()]
+            for line in lines:
+                if self._is_heading(line):
+                    sentences.append(line)
+                    continue
+
+                parts = re.split(r"(?<=[.!?।॥])\s+", line)
+                for part in parts:
+                    clean = re.sub(r"\s+", " ", part).strip()
+                    if clean:
+                        sentences.append(clean)
 
         return sentences
+
+    def _is_heading(self, line: str) -> bool:
+        """Heuristic detection for headings to force chunk boundaries."""
+        if not line:
+            return False
+
+        if len(line) <= 6:
+            return False
+
+        if line.endswith(":"):
+            return True
+
+        if line.isupper() and len(line.split()) <= 6:
+            return True
+
+        if re.match(r"^(section|chapter|unit)\s+\d+", line, re.IGNORECASE):
+            return True
+
+        return False
 
     def _split_long_text_by_words(self, text: str) -> List[str]:
         """Fallback splitter for very long sentence-like spans."""
@@ -198,6 +224,11 @@ class VectorIndex:
             sentence = sentences[i]
             sentence_tokens = len(sentence.split())
             similarity = float(similarities[i - 1]) if (i - 1) < len(similarities) else 1.0
+
+            if self._is_heading(sentence) and current_tokens >= min_tokens:
+                chunks.append(" ".join(current_sentences).strip())
+                current_sentences = []
+                current_tokens = 0
 
             if sentence_tokens > MAX_CHUNK_TOKENS:
                 if current_sentences:

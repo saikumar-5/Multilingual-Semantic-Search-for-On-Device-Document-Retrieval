@@ -8,7 +8,23 @@
       "safety"
     ],
     "marksheet": [
-      "gradecard"
+      "gradecard",
+      "result",
+      "transcript"
+    ],
+    "id": [
+      "identity"
+    ],
+    "identity": [
+      "id"
+    ],
+    "card": [
+      "identity"
+    ],
+    "electricity": [
+      "power",
+      "power supply",
+      "current"
     ],
     "invoice": [
       "bill",

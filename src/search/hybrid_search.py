@@ -20,7 +20,19 @@ import re
 
 from src.search.keyword_search import KeywordSearch
 from src.search.semantic_search import SemanticSearch
-from src.config import RRF_K
+from src.search.query_processor import QueryProcessor
+from src.config import (
+    RRF_K,
+    FUSION_METHOD,
+    FUSION_KEYWORD_WEIGHT,
+    FUSION_SEMANTIC_WEIGHT,
+    FUSION_RERANKER_WEIGHT,
+    FUSION_KEYWORD_DIGIT_BOOST,
+    FUSION_KEYWORD_SHORT_QUERY_BOOST,
+    FUSION_SEMANTIC_LONG_QUERY_BOOST,
+    DEFAULT_TOP_K,
+    RERANKER_MAX_INFLUENCE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +70,7 @@ class HybridSearch:
         self.reranker = reranker
         self.rerank_candidates = max(1, rerank_candidates)
         self.rerank_english_only = rerank_english_only
+        self.query_processor = QueryProcessor()
 
     def search(self, query: str, top_k: int = 10) -> List[Tuple[int, float]]:
         """
@@ -70,22 +83,25 @@ class HybridSearch:
         Returns:
             List of (doc_id, fused_score) tuples sorted by relevance.
         """
-        retrieval_k = max(top_k * 2, self.rerank_candidates)
+        effective_top_k = max(1, int(top_k or DEFAULT_TOP_K))
+        retrieval_k = max(effective_top_k * 2, self.rerank_candidates)
 
         # Get results from both engines
         keyword_results = self.keyword_search.search(query, retrieval_k)
         semantic_results = self.semantic_search.search(query, retrieval_k)
 
         # Rank-based fusion via Reciprocal Rank Fusion (RRF).
-        fused = self._rrf_fuse(keyword_results, semantic_results)
+        fused = self._rrf_fuse(query, keyword_results, semantic_results)
 
         # Sort by fused score
         ranked = sorted(fused.items(), key=lambda x: x[1], reverse=True)
 
         if self.reranker is not None and self._should_apply_reranker(query):
-            return self.reranker.rerank(query, ranked, top_k)
+            reranked = self.reranker.rerank(query, ranked, effective_top_k)
+            blended = self._blend_reranker_scores(ranked, reranked, effective_top_k)
+            return blended[:effective_top_k]
 
-        return ranked[:top_k]
+        return ranked[:effective_top_k]
 
     def _detect_query_language(self, query: str) -> str:
         """
@@ -169,16 +185,87 @@ class HybridSearch:
 
     def _rrf_fuse(
         self,
+        query: str,
         keyword_results: List[Tuple[int, float]],
         semantic_results: List[Tuple[int, float]],
     ) -> Dict[int, float]:
-        """Fuse ranked results using Reciprocal Rank Fusion."""
+        """Fuse ranked results using RRF, optionally weighted by query features."""
         fused: Dict[int, float] = {}
 
+        kw_weight, sem_weight = self._get_fusion_weights(query)
+
         for rank, (doc_id, _) in enumerate(keyword_results, 1):
-            fused[doc_id] = fused.get(doc_id, 0.0) + (1.0 / (self.rrf_k + rank))
+            fused[doc_id] = fused.get(doc_id, 0.0) + (
+                kw_weight * (1.0 / (self.rrf_k + rank))
+            )
 
         for rank, (doc_id, _) in enumerate(semantic_results, 1):
-            fused[doc_id] = fused.get(doc_id, 0.0) + (1.0 / (self.rrf_k + rank))
+            fused[doc_id] = fused.get(doc_id, 0.0) + (
+                sem_weight * (1.0 / (self.rrf_k + rank))
+            )
 
         return fused
+
+    def _blend_reranker_scores(
+        self,
+        fused_ranked: List[Tuple[int, float]],
+        reranked: List[Tuple[int, float]],
+        top_k: int,
+    ) -> List[Tuple[int, float]]:
+        """Blend fused scores with reranker scores using configured weight."""
+        rerank_weight = max(0.0, min(1.0, float(FUSION_RERANKER_WEIGHT)))
+        rerank_weight = min(rerank_weight, float(RERANKER_MAX_INFLUENCE))
+        if rerank_weight <= 0 or not reranked:
+            return reranked[:top_k]
+
+        fused_scores = {doc_id: score for doc_id, score in fused_ranked}
+        rerank_scores = {doc_id: score for doc_id, score in reranked}
+
+        fused_norm = self._min_max_normalize(fused_scores)
+        rerank_norm = self._min_max_normalize(rerank_scores)
+
+        all_ids = set(fused_norm) | set(rerank_norm)
+        blended = []
+        for doc_id in all_ids:
+            score = (
+                (1.0 - rerank_weight) * fused_norm.get(doc_id, 0.0)
+                + rerank_weight * rerank_norm.get(doc_id, 0.0)
+            )
+            blended.append((doc_id, score))
+
+        blended.sort(key=lambda x: x[1], reverse=True)
+        return blended[:top_k]
+
+    @staticmethod
+    def _min_max_normalize(scores: Dict[int, float]) -> Dict[int, float]:
+        if not scores:
+            return {}
+        values = list(scores.values())
+        min_v = min(values)
+        max_v = max(values)
+        if max_v - min_v <= 1e-12:
+            return {doc_id: 0.0 for doc_id in scores}
+        return {doc_id: (val - min_v) / (max_v - min_v) for doc_id, val in scores.items()}
+
+    def _get_fusion_weights(self, query: str) -> Tuple[float, float]:
+        """Compute fusion weights from query heuristics."""
+        if (FUSION_METHOD or "rrf").lower() != "weighted_rrf":
+            return 1.0, 1.0
+
+        kw_weight = float(FUSION_KEYWORD_WEIGHT)
+        sem_weight = float(FUSION_SEMANTIC_WEIGHT)
+
+        parsed = self.query_processor.parse(query)
+        terms = parsed.get("original_terms", []) or parsed.get("terms", [])
+        term_count = len(terms)
+
+        if re.search(r"\d", query):
+            kw_weight += float(FUSION_KEYWORD_DIGIT_BOOST)
+
+        if term_count > 0 and term_count <= 2:
+            kw_weight += float(FUSION_KEYWORD_SHORT_QUERY_BOOST)
+
+        if term_count >= 6:
+            sem_weight += float(FUSION_SEMANTIC_LONG_QUERY_BOOST)
+
+        return max(0.1, kw_weight), max(0.1, sem_weight)

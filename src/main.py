@@ -28,6 +28,12 @@ from src.config import (
     ENABLE_CROSS_ENCODER_RERANK,
     CROSS_ENCODER_CANDIDATES,
     CROSS_ENCODER_TOP_K,
+    CROSS_ENCODER_MODEL_NAME,
+    CROSS_ENCODER_MODEL_LOCAL_DIR,
+    MULTILINGUAL_CROSS_ENCODER_MODEL_NAME,
+    MULTILINGUAL_CROSS_ENCODER_MODEL_LOCAL_DIR,
+    USE_MULTILINGUAL_CROSS_ENCODER,
+    OFFLINE_MODE,
 )
 
 # Configure logging
@@ -37,6 +43,26 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+
+def _resolve_reranker_config():
+    if not USE_MULTILINGUAL_CROSS_ENCODER:
+        return CROSS_ENCODER_MODEL_NAME, CROSS_ENCODER_MODEL_LOCAL_DIR, True
+
+    multilingual_available = (
+        MULTILINGUAL_CROSS_ENCODER_MODEL_LOCAL_DIR.exists() or not OFFLINE_MODE
+    )
+    if multilingual_available:
+        return (
+            MULTILINGUAL_CROSS_ENCODER_MODEL_NAME,
+            MULTILINGUAL_CROSS_ENCODER_MODEL_LOCAL_DIR,
+            False,
+        )
+
+    logger.warning(
+        "Multilingual reranker enabled but model not available; falling back to English-only reranker."
+    )
+    return CROSS_ENCODER_MODEL_NAME, CROSS_ENCODER_MODEL_LOCAL_DIR, True
 
 
 def cmd_index(directory: str):
@@ -145,9 +171,13 @@ def cmd_search(query: str, mode: str = "hybrid", top_k: int = DEFAULT_TOP_K):
     kw_search = KeywordSearch(inv_index, tfidf)
     sem_search = SemanticSearch(vec_index)
     reranker = None
+    rerank_english_only = True
     if ENABLE_CROSS_ENCODER_RERANK:
+        model_name, model_local_dir, rerank_english_only = _resolve_reranker_config()
         reranker = CrossEncoderReranker(
             documents,
+            model_name=model_name,
+            model_local_dir=model_local_dir,
             top_candidates=CROSS_ENCODER_CANDIDATES,
         )
 
@@ -156,6 +186,7 @@ def cmd_search(query: str, mode: str = "hybrid", top_k: int = DEFAULT_TOP_K):
         sem_search,
         reranker=reranker,
         rerank_candidates=CROSS_ENCODER_CANDIDATES,
+        rerank_english_only=rerank_english_only,
     )
     wildcard = WildcardSearch(inv_index, tfidf)
     wildcard.build()
@@ -232,9 +263,13 @@ def cmd_evaluate():
     kw_search = KeywordSearch(inv_index, tfidf)
     sem_search = SemanticSearch(vec_index)
     reranker = None
+    rerank_english_only = True
     if ENABLE_CROSS_ENCODER_RERANK:
+        model_name, model_local_dir, rerank_english_only = _resolve_reranker_config()
         reranker = CrossEncoderReranker(
             documents,
+            model_name=model_name,
+            model_local_dir=model_local_dir,
             top_candidates=CROSS_ENCODER_CANDIDATES,
         )
     hybrid = HybridSearch(
@@ -242,6 +277,7 @@ def cmd_evaluate():
         sem_search,
         reranker=reranker,
         rerank_candidates=CROSS_ENCODER_CANDIDATES,
+        rerank_english_only=rerank_english_only,
     )
 
     # Load test queries

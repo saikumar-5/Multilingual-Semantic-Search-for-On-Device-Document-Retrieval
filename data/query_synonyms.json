@@ -2,7 +2,11 @@
   "en": {
     "network": ["networking"],
     "security": ["protection", "safety"],
-    "marksheet": ["gradecard"],
+    "marksheet": ["gradecard", "result", "transcript"],
+    "id": ["identity"],
+    "identity": ["id"],
+    "card": ["identity"],
+    "electricity": ["power", "power supply", "current"],
     "invoice": ["bill", "receipt"],
     "timetable": ["schedule"],
     "drainage": ["sewerage", "stormwater"]
