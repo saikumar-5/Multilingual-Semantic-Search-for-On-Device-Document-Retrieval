@@ -1,0 +1,12 @@
+# Enforce LF line endings in the repository
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg binary
+*.pdf binary
+*.onnx binary
+*.safetensors binary

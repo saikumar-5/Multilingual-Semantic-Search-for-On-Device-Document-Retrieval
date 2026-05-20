@@ -4,9 +4,8 @@ FAISS Vector Index with sentence-transformers embeddings.
 CO2/CO3 Alignment: Vector Space Model - representing documents and queries
 as dense vectors and using cosine similarity for retrieval.
 
-Uses paraphrase-multilingual-MiniLM-L12-v2 (~120MB) which supports
-50+ languages including English, Hindi, and Telugu in a shared
-vector space, enabling cross-language retrieval.
+Uses multilingual-e5-small (~120MB), which supports multilingual
+retrieval across English, Hindi, and Telugu in a shared vector space.
 """
 
 import numpy as np
@@ -43,8 +42,8 @@ class VectorIndex:
     Dense vector index using FAISS for efficient similarity search.
 
     Documents are:
-    1. Split into chunks (max 256 tokens each)
-    2. Encoded into 384-dimensional vectors using MiniLM
+    1. Split into chunks (max MAX_CHUNK_TOKENS words)
+    2. Encoded into 384-dimensional vectors using multilingual-e5-small
     3. Stored in a FAISS index for fast nearest-neighbor search
 
     Queries are encoded the same way and matched via cosine similarity.

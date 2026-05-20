@@ -5,7 +5,7 @@ CO3 Alignment: Combined retrieval using multiple ranking signals.
 
 Hybrid search fuses two ranked result lists using Reciprocal Rank Fusion (RRF):
 1. Keyword Search (TF-IDF): Good for exact matches, specific terms, IDs
-2. Semantic Search (MiniLM): Good for meaning, synonyms, cross-language
+2. Semantic Search (multilingual-e5): Good for meaning, synonyms, cross-language
 
 RRF Formula:
     score(d) = sum(1 / (k + rank_i(d)))

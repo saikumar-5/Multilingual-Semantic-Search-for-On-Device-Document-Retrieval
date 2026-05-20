@@ -12,11 +12,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 MODELS_DIR = PROJECT_ROOT / "models"
+CONFIG_DIR = PROJECT_ROOT / "configs"
 TEST_CORPUS_DIR = PROJECT_ROOT / "IR_DOCUMNETS"
 
 # Ensure data directory exists
 DATA_DIR.mkdir(exist_ok=True)
 MODELS_DIR.mkdir(exist_ok=True)
+CONFIG_DIR.mkdir(exist_ok=True)
 
 # ── Index File Paths ────────────────────────────────────────────────────────
 INVERTED_INDEX_PATH = DATA_DIR / "inverted_index.pkl"
@@ -25,7 +27,7 @@ FAISS_INDEX_PATH = DATA_DIR / "vectors.faiss"
 METADATA_PATH = DATA_DIR / "metadata.json"
 DOCUMENT_STORE_PATH = DATA_DIR / "doc_store.pkl"
 SETTINGS_PATH = DATA_DIR / "settings.json"
-QUERY_SYNONYMS_PATH = DATA_DIR / "query_synonyms.json"
+QUERY_SYNONYMS_PATH = CONFIG_DIR / "query_synonyms.json"
 
 # ── Model Configuration ────────────────────────────────────────────────────
 # multilingual-e5-small: multilingual retrieval model, CPU-efficient (384 dims)
