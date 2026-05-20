@@ -24,7 +24,7 @@ data/
 !data/.gitkeep
 
 IR_DOCUMNETS/
-
+Reference_docs/
 # Model files (too large for git)
 models/
 
